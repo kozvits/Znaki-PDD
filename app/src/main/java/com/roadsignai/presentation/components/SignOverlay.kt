@@ -69,7 +69,7 @@ fun SignOverlay(
             // Draw label background
             val labelText = sign.label
             val paint = android.graphics.Paint().apply {
-                this.color = color.hashCode()
+                this.color = color.toArgb()
                 textSize = 36f
                 isAntiAlias = true
             }

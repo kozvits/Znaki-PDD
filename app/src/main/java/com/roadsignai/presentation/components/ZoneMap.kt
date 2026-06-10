@@ -45,7 +45,7 @@ fun ZoneMap(
             .height(180.dp),
         shape = RoundedCornerShape(12.dp),
         color = DarkSurface,
-        border = CardBorder.let { null }
+        border = null
     ) {
         Column(
             modifier = Modifier.padding(12.dp)

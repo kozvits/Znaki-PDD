@@ -24,6 +24,7 @@ import com.roadsignai.domain.usecase.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -175,7 +176,7 @@ class CameraViewModel @Inject constructor(
 
     private fun startDetection() {
         detectionJob = viewModelScope.launch {
-            imageAnalysis.setAnalyzer(Dispatchers.Default) { imageProxy ->
+            imageAnalysis.setAnalyzer(Dispatchers.Default.asExecutor()) { imageProxy ->
                 onEvent(CameraEvent.ImageAvailable(imageProxy))
             }
         }
