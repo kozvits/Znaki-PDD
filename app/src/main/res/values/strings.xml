@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Znaki-PDD</string>
+    <string name="app_title">RoadSignAI</string>
+
+    <!-- Permissions -->
+    <string name="permission_camera_title">Доступ к камере</string>
+    <string name="permission_camera_description">Для детекции дорожных знаков необходим доступ к камере</string>
+    <string name="permission_location_title">Доступ к местоположению</string>
+    <string name="permission_location_description">Для определения зон действия знаков необходим доступ к GPS</string>
+    <string name="permission_notification_title">Уведомления</string>
+    <string name="permission_notification_description">Для предупреждений о нарушениях</string>
+
+    <!-- UI Labels -->
+    <string name="btn_settings">Настройки</string>
+    <string name="btn_map">Карта</string>
+    <string name="btn_mute">Без звука</string>
+    <string name="btn_unmute">Звук вкл</string>
+    <string name="label_signs">Дорожные знаки</string>
+    <string name="label_zones">Зоны действия</string>
+    <string name="label_no_signs">Нет обнаруженных знаков</string>
+    <string name="label_speed">км/ч</string>
+    <string name="label_distance_m">м</string>
+    <string name="label_distance_km">км</string>
+    <string name="label_stop_warning">ОСТАНОВКА В ЗОНЕ ЗАПРЕТА!</string>
+    <string name="label_zone_approaching">Приближается зона действия знака</string>
+    <string name="label_timer">Таймер сессии</string>
+    <string name="label_detection_paused">Детекция приостановлена</string>
+
+    <!-- TTS messages -->
+    <string name="tts_stop_warning">Внимание! Остановка в зоне действия знака! Немедленно покиньте зону!</string>
+    <string name="tts_zone_approaching">Приближается зона действия знака. Остановка запрещена</string>
+    <string name="tts_zone_ended">Предположительно зона действия знака закончена</string>
+    <string name="tts_speed_limit">Знак ограничения скорости %d километров в час</string>
+    <string name="tts_stop_sign">Знак стоп</string>
+    <string name="tts_pedestrian">Внимание, пешеходный переход</string>
+    <string name="tts_no_entry">Знак въезд запрещён</string>
+    <string name="tts_no_stopping">Знак остановка запрещена</string>
+    <string name="tts_no_parking">Знак стоянка запрещена</string>
+    <string name="tts_yield">Знак уступи дорогу</string>
+    <string name="tts_main_road">Знак главная дорога</string>
+    <string name="tts_no_overtaking">Знак обгон запрещён</string>
+    <string name="tts_no_traffic">Знак движение запрещено</string>
+
+    <!-- Sign categories -->
+    <string name="sign_speed_limit">Ограничение скорости %d км/ч</string>
+    <string name="sign_stop">Стоп</string>
+    <string name="sign_yield">Уступи дорогу</string>
+    <string name="sign_main_road">Главная дорога</string>
+    <string name="sign_pedestrian_crossing">Пешеходный переход</string>
+    <string name="sign_no_entry">Въезд запрещён</string>
+    <string name="sign_no_traffic">Движение запрещено</string>
+    <string name="sign_no_overtaking">Обгон запрещён</string>
+    <string name="sign_no_parking">Стоянка запрещена</string>
+    <string name="sign_no_stopping">Остановка запрещена</string>
+    <string name="sign_end_of_restrictions">Конец зоны всех ограничений</string>
+    <string name="sign_crosswalk">Пешеходный переход</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_tts_enabled">TTS включён</string>
+    <string name="settings_tts_volume">Громкость TTS</string>
+    <string name="settings_min_confidence">Минимальная уверенность</string>
+    <string name="settings_tts_confidence">Порог для озвучивания</string>
+    <string name="settings_tts_interval">Интервал озвучивания (сек)</string>
+    <string name="settings_speed_zone">Зона по умолчанию (скорость)</string>
+    <string name="settings_parking_zone">Зона по умолчанию (стоянка)</string>
+    <string name="settings_vibration">Вибрация при нарушении</string>
+    <string name="settings_show_map">Показывать карту зон</string>
+    <string name="settings_save_logs">Сохранять логи</string>
+    <string name="btn_back">Назад</string>
+</resources>

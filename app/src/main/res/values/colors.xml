@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark theme -->
+    <color name="dark_surface">#FF1A1A2E</color>
+    <color name="dark_background">#FF0F0F1A</color>
+    <color name="dark_surface_variant">#FF2A2A3E</color>
+    <color name="dark_on_surface">#FFE0E0E8</color>
+    <color name="dark_on_background">#FFC0C0D0</color>
+    <color name="dark_accent">#FFFF8C00</color>
+    <color name="dark_accent_variant">#FFFF6D00</color>
+    <color name="dark_primary">#FF4A90D9</color>
+    <color name="dark_error">#FFD32F2F</color>
+    <color name="dark_error_container">#FF4A1C1C</color>
+    <color name="dark_outline">#FF5A5A6E</color>
+
+    <!-- Sign category colors -->
+    <color name="sign_prohibitory">#FFD32F2F</color>
+    <color name="sign_warning">#FFFF8C00</color>
+    <color name="sign_mandatory">#FF2196F3</color>
+    <color name="sign_informational">#FF4CAF50</color>
+    <color name="sign_service">#FF9C27B0</color>
+
+    <!-- Zone colors -->
+    <color name="zone_forbidden">#80D32F2F</color>
+    <color name="zone_warning">#80FF8C00</color>
+    <color name="zone_safe">#804CAF50</color>
+</resources>
