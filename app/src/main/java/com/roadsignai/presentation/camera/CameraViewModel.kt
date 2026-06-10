@@ -7,9 +7,7 @@ import android.location.Location
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -22,9 +20,7 @@ import com.roadsignai.domain.model.VehicleState
 import com.roadsignai.domain.repository.SignRepository
 import com.roadsignai.domain.usecase.*
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -56,6 +52,7 @@ data class CameraUiState(
  */
 sealed class CameraEvent {
     data object RequestPermissions : CameraEvent()
+    data class PermissionsResult(val cameraGranted: Boolean, val locationGranted: Boolean) : CameraEvent()
     data object ToggleMute : CameraEvent()
     data object StartCamera : CameraEvent()
     data object StopCamera : CameraEvent()
@@ -72,9 +69,7 @@ class CameraViewModel @Inject constructor(
     private val checkStopInZoneUseCase: CheckStopInZoneUseCase,
     private val speakSignUseCase: SpeakSignUseCase,
     private val signRepository: SignRepository,
-    private val settingsDataStore: SettingsDataStore,
-    private val imageAnalysis: ImageAnalysis,
-    private val preview: Preview
+    private val settingsDataStore: SettingsDataStore
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(CameraUiState())
@@ -85,7 +80,6 @@ class CameraViewModel @Inject constructor(
     private var settings = AppSettings()
     private var lastLocation: Location? = null
     private var frameCount = 0
-    private var detectionJob: Job? = null
 
     // Session timer
     private var sessionStartTime = 0L
@@ -116,6 +110,17 @@ class CameraViewModel @Inject constructor(
                 updatePermissions()
                 if (_uiState.value.hasCameraPermission && _uiState.value.hasLocationPermission) {
                     startDetection()
+                }
+            }
+            is CameraEvent.PermissionsResult -> {
+                _uiState.update {
+                    it.copy(
+                        hasCameraPermission = event.cameraGranted,
+                        hasLocationPermission = event.locationGranted
+                    )
+                }
+                if (event.cameraGranted && event.locationGranted) {
+                    LocationTrackingService.start(getApplication())
                 }
             }
             is CameraEvent.ToggleMute -> {
@@ -175,17 +180,11 @@ class CameraViewModel @Inject constructor(
     }
 
     private fun startDetection() {
-        detectionJob = viewModelScope.launch {
-            imageAnalysis.setAnalyzer(Dispatchers.Default.asExecutor()) { imageProxy ->
-                onEvent(CameraEvent.ImageAvailable(imageProxy))
-            }
-        }
+        // Image analysis analyzer is set up in CameraScreen via
+        // cameraController.setImageAnalysisAnalyzer(). Nothing else needed here.
     }
 
     private fun stopDetection() {
-        detectionJob?.cancel()
-        detectionJob = null
-        imageAnalysis.clearAnalyzer()
         speakSignUseCase.stop()
     }
 
@@ -383,7 +382,6 @@ class CameraViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
-        detectionJob?.cancel()
         locationJob?.cancel()
         speakSignUseCase.shutdown()
     }

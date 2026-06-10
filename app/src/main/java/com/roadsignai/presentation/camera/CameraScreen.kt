@@ -2,6 +2,8 @@ package com.roadsignai.presentation.camera
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
@@ -28,6 +30,8 @@ import com.roadsignai.data.location.LocationTrackingService
 import com.roadsignai.presentation.components.*
 import com.roadsignai.presentation.theme.*
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 
 /**
  * Main camera screen showing CameraX preview + overlay + sign cards + controls.
@@ -43,6 +47,15 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraController = remember { LifecycleCameraController(context) }
 
+    // Permission launcher — shows system dialog and reports result back to ViewModel
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
+        val locationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        onEvent(CameraEvent.PermissionsResult(cameraGranted, locationGranted))
+    }
+
     // Start location service
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(
@@ -53,11 +66,17 @@ fun CameraScreen(
         }
     }
 
-    // Bind camera on permission
+    // Bind camera + set up image analysis when permission granted
     LaunchedEffect(uiState.hasCameraPermission) {
         if (uiState.hasCameraPermission) {
-            cameraController.bindToLifecycle(lifecycleOwner)
             cameraController.cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
+            // Forward camera frames to ViewModel for sign detection
+            cameraController.setImageAnalysisAnalyzer(
+                Dispatchers.Default.asExecutor()
+            ) { imageProxy ->
+                onEvent(CameraEvent.ImageAvailable(imageProxy))
+            }
+            cameraController.bindToLifecycle(lifecycleOwner)
             onEvent(CameraEvent.StartCamera)
         }
     }
@@ -106,7 +125,14 @@ fun CameraScreen(
                         color = OnDarkSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { onEvent(CameraEvent.RequestPermissions) }) {
+                    Button(onClick = {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.CAMERA,
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                            )
+                        )
+                    }) {
                         Text("Предоставить доступ")
                     }
                 }
