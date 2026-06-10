@@ -4,13 +4,11 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,21 +18,36 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.roadsignai.data.location.LocationTrackingService
-import com.roadsignai.presentation.components.*
+import com.roadsignai.domain.model.RoadSign
+import com.roadsignai.domain.model.SignCategory
 import com.roadsignai.presentation.theme.*
+import com.roadsignai.presentation.theme.SignInformational
+import com.roadsignai.presentation.theme.SignMandatory
+import com.roadsignai.presentation.theme.SignProhibitory
+import com.roadsignai.presentation.theme.SignService
+import com.roadsignai.presentation.theme.SignWarning
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 
 /**
- * Main camera screen showing CameraX preview + overlay + sign cards + controls.
+ * Main camera screen with full-frame detection.
+ *
+ * Features:
+ * - Full-screen camera preview (zone = entire screen)
+ * - Center overlay showing detected sign for 3 seconds with visual + TTS
+ * - Single log line at bottom when sign is recognized
+ * - Compact speed + controls bar
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +60,7 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraController = remember { LifecycleCameraController(context) }
 
-    // Permission launcher — shows system dialog and reports result back to ViewModel
+    // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -66,11 +79,10 @@ fun CameraScreen(
         }
     }
 
-    // Bind camera + set up image analysis when permission granted
+    // Bind camera
     LaunchedEffect(uiState.hasCameraPermission) {
         if (uiState.hasCameraPermission) {
             cameraController.cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
-            // Forward camera frames to ViewModel for sign detection
             cameraController.setImageAnalysisAnalyzer(
                 Dispatchers.Default.asExecutor()
             ) { imageProxy ->
@@ -81,7 +93,7 @@ fun CameraScreen(
         }
     }
 
-    // Cleanup on dispose
+    // Cleanup
     DisposableEffect(Unit) {
         onDispose {
             cameraController.unbind()
@@ -94,7 +106,7 @@ fun CameraScreen(
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        // Camera preview
+        // ========== 1. Full-screen camera preview ==========
         if (uiState.hasCameraPermission) {
             AndroidView(
                 factory = { ctx ->
@@ -139,132 +151,192 @@ fun CameraScreen(
             }
         }
 
-        // Sign overlay (bounding boxes on camera preview)
-        if (uiState.hasCameraPermission) {
-            SignOverlay(
-                signs = uiState.detectedSigns,
-                previewWidth = 1280,
-                previewHeight = 720,
-                modifier = Modifier.fillMaxSize()
-            )
+        // ========== 2. Center overlay — detected sign card (3 sec) ==========
+        AnimatedVisibility(
+            visible = uiState.displayedSign != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            uiState.displayedSign?.let { sign ->
+                SignDetectedCard(sign = sign)
+            }
         }
 
-        // Warning banner (top)
-        WarningBanner(
-            isVisible = uiState.isWarningVisible,
-            message = uiState.warningMessage,
-            isCritical = uiState.isWarningCritical,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-
-        // Approaching zone warning
-        ZoneApproachBanner(
-            isVisible = uiState.isApproachingWarningVisible,
-            message = uiState.approachingWarningMessage,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-
-        // Bottom panel with signs, zones, and controls
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(DarkBackground.copy(alpha = 0.85f))
+        // ========== 3. Log line at bottom (only when sign recognized) ==========
+        val lastLog = uiState.recentSigns.firstOrNull()
+        AnimatedVisibility(
+            visible = lastLog != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            // Active zones compact view
-            if (uiState.activeZones.isNotEmpty()) {
-                ZoneMap(
-                    activeZones = uiState.activeZones,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            lastLog?.let { sign ->
+                SignLogLine(sign = sign)
+            }
+        }
+
+        // ========== 4. Bottom controls bar ==========
+        BottomControlsBar(
+            speedKmh = uiState.currentSpeedKmh,
+            sessionTimeSeconds = uiState.sessionTimeSeconds,
+            isMuted = uiState.isMuted,
+            onSettingsClick = onSettingsClick,
+            onToggleMute = { onEvent(CameraEvent.ToggleMute) },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Sign detected card — large center overlay for 3 seconds
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SignDetectedCard(sign: RoadSign) {
+    val categoryColor = signCategoryColor(sign.category)
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = DarkSurface.copy(alpha = 0.92f),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp,
+        modifier = Modifier
+            .widthIn(min = 260.dp, max = 340.dp)
+            .wrapContentHeight()
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            // Large colored circle representing sign
+            Box(
+                modifier = Modifier
+                    .size(140.dp)
+                    .clip(CircleShape)
+                    .background(categoryColor.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center
+            ) {
+                // Category icon/letter
+                Text(
+                    text = categoryEmoji(sign.category),
+                    fontSize = 64.sp,
+                    textAlign = TextAlign.Center
                 )
             }
 
-            // Recent signs list
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 160.dp),
-                color = DarkBackground.copy(alpha = 0.0f)
-            ) {
-                if (uiState.recentSigns.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Нет обнаруженных знаков",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = OnDarkSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        items(uiState.recentSigns, key = { it.id }) { sign ->
-                            SignCard(
-                                sign = sign,
-                                distance = "${(sign.confidence * 100).toInt()}%"
-                            )
-                        }
-                    }
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Sign code from ПДД РБ
+            if (sign.signCode != null) {
+                Text(
+                    text = "ПДД РБ ${sign.signCode}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = categoryColor,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Sign name (Russian)
+            if (sign.signName != null) {
+                Text(
+                    text = sign.signName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = OnDarkSurface,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                Text(
+                    text = sign.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = OnDarkSurface,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // Speed limit value
+            if (sign.speedLimitValue != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = categoryColor.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = "${sign.speedLimitValue} км/ч",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = categoryColor,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
                 }
             }
 
-            // Bottom controls bar
-            BottomControlsBar(
-                speedKmh = uiState.currentSpeedKmh,
-                sessionTimeSeconds = uiState.sessionTimeSeconds,
-                isMuted = uiState.isMuted,
-                signCount = uiState.recentSigns.size,
-                onSettingsClick = onSettingsClick,
-                onToggleMute = { onEvent(CameraEvent.ToggleMute) },
-                onClearSigns = { onEvent(CameraEvent.ClearSigns) }
+            // Confidence
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "${(sign.confidence * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = OnDarkSurfaceVariant
             )
-        }
-
-        // Error snackbar
-        if (uiState.errorMessage != null) {
-            Snackbar(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-                action = {
-                    TextButton(onClick = { /* dismiss */ }) {
-                        Text("OK")
-                    }
-                }
-            ) {
-                Text(uiState.errorMessage)
-            }
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+//  Single log line at bottom (visible only when sign recognized)
+// ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SignLogLine(sign: RoadSign) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = DarkSurface.copy(alpha = 0.80f),
+        tonalElevation = 2.dp
+    ) {
+        Text(
+            text = buildString {
+                append("✓ ")
+                append(sign.signName ?: sign.label)
+                if (sign.signCode != null) append(" [${sign.signCode}]")
+                if (sign.speedLimitValue != null) append(" — ${sign.speedLimitValue} км/ч")
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = OnDarkSurface,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            maxLines = 1
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Bottom controls bar (compact)
+// ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun BottomControlsBar(
     speedKmh: Float,
     sessionTimeSeconds: Long,
     isMuted: Boolean,
-    signCount: Int,
     onSettingsClick: () -> Unit,
     onToggleMute: () -> Unit,
-    onClearSigns: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = DarkSurface.copy(alpha = 0.95f),
+        modifier = modifier.fillMaxWidth(),
+        color = DarkSurface.copy(alpha = 0.90f),
         tonalElevation = 4.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -274,19 +346,19 @@ private fun BottomControlsBar(
                 color = DarkSurfaceVariant
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Speed,
                         contentDescription = null,
                         tint = if (speedKmh > 0) AccentOrange else OnDarkSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${speedKmh.toInt()}",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         color = OnDarkSurface,
                         fontWeight = FontWeight.Bold
                     )
@@ -295,53 +367,34 @@ private fun BottomControlsBar(
                         text = "км/ч",
                         style = MaterialTheme.typography.labelSmall,
                         color = OnDarkSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 3.dp)
                     )
                 }
             }
 
-            // Session timer
+            // Timer
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Timer,
                     contentDescription = null,
                     tint = OnDarkSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = formatDuration(sessionTimeSeconds),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelSmall,
                     color = OnDarkSurfaceVariant
                 )
             }
 
-            // Sign count
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Signpost,
-                    contentDescription = null,
-                    tint = AccentOrange,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "$signCount",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = AccentOrange,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
             // Action buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 // Mute/Unmute
                 IconButton(
                     onClick = onToggleMute,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(if (isMuted) StatusRed.copy(alpha = 0.2f) else DarkSurfaceVariant)
                 ) {
@@ -349,23 +402,7 @@ private fun BottomControlsBar(
                         imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = if (isMuted) "Включить звук" else "Выключить звук",
                         tint = if (isMuted) StatusRed else AccentOrange,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Clear
-                IconButton(
-                    onClick = onClearSigns,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(DarkSurfaceVariant)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "Очистить",
-                        tint = OnDarkSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
@@ -373,7 +410,7 @@ private fun BottomControlsBar(
                 IconButton(
                     onClick = onSettingsClick,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(DarkSurfaceVariant)
                 ) {
@@ -381,12 +418,57 @@ private fun BottomControlsBar(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Настройки",
                         tint = OnDarkSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────────────────────
+
+private fun signCategoryColor(category: SignCategory): Color = when {
+    category.priority == 1 || category.isProhibitory -> SignProhibitory
+    category.priority == 2 -> SignWarning
+    category.name.contains("SERVICE") || category.name.contains("FIRST") ||
+        category.name.contains("HOSPITAL") || category.name.contains("GAS") ||
+        category.name.contains("RESTAURANT") || category.name.contains("HOTEL") ||
+        category.name.contains("CAMPING") || category.name.contains("POLICE") ||
+        category.name.contains("TOILET") -> SignService
+    category.name.contains("INFORMATION") || category.name.contains("PEDESTRIAN") ||
+        category.name.contains("MOTORWAY") || category.name.contains("PARKING") ||
+        category.name.contains("SETTLEMENT") || category.name.contains("ROAD_NUMBER") -> SignInformational
+    else -> SignMandatory
+}
+
+/**
+ * Returns an emoji representing the sign category for the center overlay.
+ */
+private fun categoryEmoji(category: SignCategory): String = when {
+    category.isProhibitory -> "\u26D4" // ⛔
+    category.priority == 1 -> "\u26A0" // ⚠
+    category.priority == 2 -> "\u26A0" // ⚠
+    category.name in listOf(
+        "MOTORWAY", "EXPRESSWAY", "ONE_WAY", "DEAD_END",
+        "PEDESTRIAN_CROSSING", "CYCLE_CROSSING", "PEDESTRIAN_UNDERPASS",
+        "SETTLEMENT_SIGN", "ROAD_NUMBER", "KILOMETER_MARKER"
+    ) -> "\u2139" // ℹ
+    category.name in listOf(
+        "GAS_STATION", "CHARGING_STATION", "CAR_SERVICE", "CAR_WASH",
+        "RESTAURANT", "HOTEL", "CAMPING", "REST_AREA",
+        "TELEPHONE", "TOILET", "DRINKING_WATER",
+        "FIRST_AID", "HOSPITAL", "POLICE", "LANDMARK"
+    ) -> "\uD83D\uDEE5" // 🛥
+    category.name == "STOP" -> "\uD83D\uDED1" // 🛑
+    category.name == "DIRECTION_MANDATORY" || category.name == "ROUNDABOUT" -> "\u27A1" // ➡
+    category.name == "RESIDENTIAL_ZONE" || category.name == "PEDESTRIAN_ZONE" -> "\uD83C\uDFE0" // 🏠
+    category.name == "ADDITIONAL_PLATE" -> "\uD83D\uDCCC" // 📌
+    category.name.contains("WARNING") -> "\u26A0" // ⚠
+    category.name == "SPEED_LIMIT" || category.name == "SPEED_LIMIT_ZONE" -> "\uD83D\uDEA6" // 🚦
+    else -> "\uD83D\uDEA7" // 🚧
 }
 
 private fun formatDuration(seconds: Long): String {

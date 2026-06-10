@@ -44,7 +44,9 @@ data class CameraUiState(
     val isMuted: Boolean = false,
     val hasCameraPermission: Boolean = false,
     val hasLocationPermission: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Sign currently displayed in center overlay (shows for 3 sec). */
+    val displayedSign: RoadSign? = null
 )
 
 /**
@@ -179,6 +181,17 @@ class CameraViewModel @Inject constructor(
         }
     }
 
+    /** Timer Job to clear displayed sign after 3 seconds. */
+    private var displayTimerJob: Job? = null
+
+    private fun launchDisplayClearTimer() {
+        displayTimerJob?.cancel()
+        displayTimerJob = viewModelScope.launch {
+            delay(3000L)
+            _uiState.update { it.copy(displayedSign = null) }
+        }
+    }
+
     private fun startDetection() {
         // Image analysis analyzer is set up in CameraScreen via
         // cameraController.setImageAnalysisAnalyzer(). Nothing else needed here.
@@ -273,6 +286,14 @@ class CameraViewModel @Inject constructor(
                 recentSigns = recentSigns,
                 activeZones = activeZones
             )
+        }
+
+        // Show first recognized sign in center overlay for 3 seconds
+        val signToDisplay = newSigns.firstOrNull { it.confidence >= settings.speakConfidence }
+        if (signToDisplay != null) {
+            _uiState.update { it.copy(displayedSign = signToDisplay) }
+            // Auto-clear after 3 seconds
+            launchDisplayClearTimer()
         }
 
         // Check for stop-in-zone violation
@@ -382,6 +403,7 @@ class CameraViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        displayTimerJob?.cancel()
         locationJob?.cancel()
         speakSignUseCase.shutdown()
     }

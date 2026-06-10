@@ -34,6 +34,7 @@ val SignProhibitory = Color(0xFFD32F2F)
 val SignWarning = Color(0xFFFF8C00)
 val SignMandatory = Color(0xFF2196F3)
 val SignInformational = Color(0xFF4CAF50)
+val SignService = Color(0xFF9C27B0)
 
 // Zone colors (semi-transparent)
 val ZoneForbidden = Color(0x80D32F2F)
