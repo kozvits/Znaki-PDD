@@ -7,7 +7,7 @@ import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.russian.RussianTextRecognizerOptions
+import com.google.mlkit.vision.text.TextRecognizerOptions
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,6 +30,6 @@ object MLModule {
 
     @Provides
     fun provideTextRecognizer(): TextRecognizer {
-        return TextRecognition.getClient(RussianTextRecognizerOptions.Builder().build())
+        return TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 }

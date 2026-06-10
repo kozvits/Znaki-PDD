@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import com.roadsignai.domain.model.RoadSign
 import com.roadsignai.presentation.theme.SignProhibitory
 import com.roadsignai.presentation.theme.SignWarning
@@ -68,8 +69,9 @@ fun SignOverlay(
 
             // Draw label background
             val labelText = sign.label
+            val categoryColor = color
             val paint = android.graphics.Paint().apply {
-                this.color = color.toArgb()
+                this.color = categoryColor.toArgb()
                 textSize = 36f
                 isAntiAlias = true
             }
@@ -85,11 +87,12 @@ fun SignOverlay(
             )
 
             // Label text
+            paint.setColor(android.graphics.Color.WHITE)
             drawContext.canvas.nativeCanvas.drawText(
                 labelText,
                 left + 8f,
                 top - 12f,
-                paint.apply { color = android.graphics.Color.WHITE }
+                paint
             )
 
             // Confidence badge
@@ -103,11 +106,13 @@ fun SignOverlay(
                     size = Size(confWidth + 16f, labelHeight)
                 )
 
+                paint.setColor(android.graphics.Color.WHITE)
+                paint.setTextSize(28f)
                 drawContext.canvas.nativeCanvas.drawText(
                     confText,
                     right - confWidth - 8f,
                     top - 12f,
-                    paint.apply { color = android.graphics.Color.WHITE; textSize = 28f }
+                    paint
                 )
             }
         }

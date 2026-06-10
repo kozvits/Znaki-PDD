@@ -15,9 +15,12 @@ object TTSModule {
 
     @Provides
     fun provideTextToSpeech(@ApplicationContext context: Context): TextToSpeech {
-        return TextToSpeech(context) { tts ->
-            tts.language = Locale("ru", "RU")
-            tts.setSpeechRate(0.9f)
-        }
+        val tts = TextToSpeech(context, TextToSpeech.OnInitListener { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts.setLanguage(Locale("ru", "RU"))
+                tts.setSpeechRate(0.9f)
+            }
+        })
+        return tts
     }
 }

@@ -11,6 +11,7 @@ import com.roadsignai.domain.model.VehicleState
 import com.roadsignai.domain.repository.SignRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,7 +32,7 @@ class SignRepositoryImpl @Inject constructor(
     }
 
     override suspend fun saveSign(sign: RoadSign) {
-        if (!settingsDataStore.settingsFlow.value?.saveLogs ?: false) return
+        if (!settingsDataStore.settingsFlow.first().saveLogs) return
         signDao.insertSign(sign.toEntity())
     }
 
