@@ -31,11 +31,6 @@ import com.roadsignai.data.location.LocationTrackingService
 import com.roadsignai.domain.model.RoadSign
 import com.roadsignai.domain.model.SignCategory
 import com.roadsignai.presentation.theme.*
-import com.roadsignai.presentation.theme.SignInformational
-import com.roadsignai.presentation.theme.SignMandatory
-import com.roadsignai.presentation.theme.SignProhibitory
-import com.roadsignai.presentation.theme.SignService
-import com.roadsignai.presentation.theme.SignWarning
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
@@ -46,8 +41,8 @@ import kotlinx.coroutines.asExecutor
  * Features:
  * - Full-screen camera preview (zone = entire screen)
  * - Center overlay showing detected sign for 3 seconds with visual + TTS
- * - Single log line at bottom when sign is recognized
- * - Compact speed + controls bar
+ * - Single log line at bottom (above controls bar) when sign is recognized
+ * - Compact speed + controls bar at very bottom
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -151,7 +146,20 @@ fun CameraScreen(
             }
         }
 
-        // ========== 2. Center overlay — detected sign card (3 sec) ==========
+        // ========== 2. Scanning indicator (top-right corner) ==========
+        // Pulsing dot to show camera/detection is active
+        if (uiState.hasCameraPermission) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(StatusGreen.copy(alpha = 0.85f))
+            )
+        }
+
+        // ========== 3. Center overlay — detected sign card (3 sec) ==========
         AnimatedVisibility(
             visible = uiState.displayedSign != null,
             enter = fadeIn() + scaleIn(initialScale = 0.8f),
@@ -163,20 +171,7 @@ fun CameraScreen(
             }
         }
 
-        // ========== 3. Log line at bottom (only when sign recognized) ==========
-        val lastLog = uiState.recentSigns.firstOrNull()
-        AnimatedVisibility(
-            visible = lastLog != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            lastLog?.let { sign ->
-                SignLogLine(sign = sign)
-            }
-        }
-
-        // ========== 4. Bottom controls bar ==========
+        // ========== 4. Bottom controls bar (drawn first, so log is on top) ==========
         BottomControlsBar(
             speedKmh = uiState.currentSpeedKmh,
             sessionTimeSeconds = uiState.sessionTimeSeconds,
@@ -185,6 +180,23 @@ fun CameraScreen(
             onToggleMute = { onEvent(CameraEvent.ToggleMute) },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // ========== 5. Log line — drawn ABOVE controls bar ==========
+        val lastLog = uiState.recentSigns.firstOrNull()
+        AnimatedVisibility(
+            visible = lastLog != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            lastLog?.let { sign ->
+                SignLogLine(
+                    sign = sign,
+                    // Offset above controls bar
+                    modifier = Modifier.padding(bottom = 48.dp)
+                )
+            }
+        }
     }
 }
 
@@ -217,7 +229,6 @@ private fun SignDetectedCard(sign: RoadSign) {
                     .background(categoryColor.copy(alpha = 0.25f)),
                 contentAlignment = Alignment.Center
             ) {
-                // Category icon/letter
                 Text(
                     text = categoryEmoji(sign.category),
                     fontSize = 64.sp,
@@ -239,23 +250,14 @@ private fun SignDetectedCard(sign: RoadSign) {
             }
 
             // Sign name (Russian)
-            if (sign.signName != null) {
-                Text(
-                    text = sign.signName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OnDarkSurface,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            } else {
-                Text(
-                    text = sign.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OnDarkSurface,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
+            val displayName = sign.signName ?: sign.label
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.titleMedium,
+                color = OnDarkSurface,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
 
             // Speed limit value
             if (sign.speedLimitValue != null) {
@@ -290,21 +292,22 @@ private fun SignDetectedCard(sign: RoadSign) {
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun SignLogLine(sign: RoadSign) {
+private fun SignLogLine(sign: RoadSign, modifier: Modifier = Modifier) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp),
         shape = RoundedCornerShape(12.dp),
-        color = DarkSurface.copy(alpha = 0.80f),
-        tonalElevation = 2.dp
+        color = DarkSurface.copy(alpha = 0.85f),
+        tonalElevation = 4.dp,
+        shadowElevation = 6.dp
     ) {
         Text(
             text = buildString {
-                append("✓ ")
+                append("\u2713 ") // ✓
                 append(sign.signName ?: sign.label)
                 if (sign.signCode != null) append(" [${sign.signCode}]")
-                if (sign.speedLimitValue != null) append(" — ${sign.speedLimitValue} км/ч")
+                if (sign.speedLimitValue != null) append(" \u2014 ${sign.speedLimitValue} \u043A\u043C/\u0447")
             },
             style = MaterialTheme.typography.bodyMedium,
             color = OnDarkSurface,
@@ -364,7 +367,7 @@ private fun BottomControlsBar(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
-                        text = "км/ч",
+                        text = "\u043A\u043C/\u0447",
                         style = MaterialTheme.typography.labelSmall,
                         color = OnDarkSurfaceVariant,
                         modifier = Modifier.padding(top = 3.dp)
@@ -400,7 +403,7 @@ private fun BottomControlsBar(
                 ) {
                     Icon(
                         imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = if (isMuted) "Включить звук" else "Выключить звук",
+                        contentDescription = if (isMuted) "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0437\u0432\u0443\u043A" else "\u0412\u044B\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0437\u0432\u0443\u043A",
                         tint = if (isMuted) StatusRed else AccentOrange,
                         modifier = Modifier.size(16.dp)
                     )
@@ -416,7 +419,7 @@ private fun BottomControlsBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Настройки",
+                        contentDescription = "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
                         tint = OnDarkSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -444,31 +447,23 @@ private fun signCategoryColor(category: SignCategory): Color = when {
     else -> SignMandatory
 }
 
-/**
- * Returns an emoji representing the sign category for the center overlay.
- */
 private fun categoryEmoji(category: SignCategory): String = when {
     category.isProhibitory -> "\u26D4" // ⛔
     category.priority == 1 -> "\u26A0" // ⚠
     category.priority == 2 -> "\u26A0" // ⚠
-    category.name in listOf(
-        "MOTORWAY", "EXPRESSWAY", "ONE_WAY", "DEAD_END",
-        "PEDESTRIAN_CROSSING", "CYCLE_CROSSING", "PEDESTRIAN_UNDERPASS",
-        "SETTLEMENT_SIGN", "ROAD_NUMBER", "KILOMETER_MARKER"
-    ) -> "\u2139" // ℹ
-    category.name in listOf(
-        "GAS_STATION", "CHARGING_STATION", "CAR_SERVICE", "CAR_WASH",
-        "RESTAURANT", "HOTEL", "CAMPING", "REST_AREA",
-        "TELEPHONE", "TOILET", "DRINKING_WATER",
-        "FIRST_AID", "HOSPITAL", "POLICE", "LANDMARK"
-    ) -> "\uD83D\uDEE5" // 🛥
     category.name == "STOP" -> "\uD83D\uDED1" // 🛑
     category.name == "DIRECTION_MANDATORY" || category.name == "ROUNDABOUT" -> "\u27A1" // ➡
     category.name == "RESIDENTIAL_ZONE" || category.name == "PEDESTRIAN_ZONE" -> "\uD83C\uDFE0" // 🏠
     category.name == "ADDITIONAL_PLATE" -> "\uD83D\uDCCC" // 📌
     category.name.contains("WARNING") -> "\u26A0" // ⚠
     category.name == "SPEED_LIMIT" || category.name == "SPEED_LIMIT_ZONE" -> "\uD83D\uDEA6" // 🚦
-    else -> "\uD83D\uDEA7" // 🚧
+    category.name in listOf(
+        "GAS_STATION", "CHARGING_STATION", "CAR_SERVICE", "CAR_WASH",
+        "RESTAURANT", "HOTEL", "CAMPING", "REST_AREA",
+        "TELEPHONE", "TOILET", "DRINKING_WATER",
+        "FIRST_AID", "HOSPITAL", "POLICE", "LANDMARK"
+    ) -> "\uD83D\uDEE5\uFE0F" // 🛥️
+    else -> "\u2139\uFE0F" // ℹ️
 }
 
 private fun formatDuration(seconds: Long): String {
