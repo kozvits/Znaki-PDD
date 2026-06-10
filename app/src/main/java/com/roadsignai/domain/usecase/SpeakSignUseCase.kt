@@ -15,6 +15,9 @@ import kotlinx.coroutines.withContext
  * 1. Critical (Stop, No Entry, No Stopping) — QUEUE_FLUSH
  * 2. Warning (Speed Limit, Pedestrian Crossing) — QUEUE_FLUSH for critical, QUEUE_ADD for warning
  * 3. Informational (Main Road, Yield) — QUEUE_ADD
+ *
+ * Now uses the Belarusian sign database for richer announcements:
+ * "Знак 3.24.1: Ограничение максимальной скорости, 60 километров в час"
  */
 class SpeakSignUseCase @Inject constructor(
     private val tts: TextToSpeech
@@ -24,6 +27,7 @@ class SpeakSignUseCase @Inject constructor(
 
     /**
      * Speak the sign announcement.
+     * Uses signName from the database when available for richer announcements.
      */
     suspend operator fun invoke(
         sign: RoadSign,
@@ -33,7 +37,12 @@ class SpeakSignUseCase @Inject constructor(
         if (now - lastSpeakTimestamp < minIntervalMs) return
 
         withContext(Dispatchers.Main) {
-            val text = SignCategory.getTtsText(sign.category, sign.speedLimitValue)
+            val text = if (sign.signName != null) {
+                // Use the database name for a detailed announcement
+                buildRichAnnouncement(sign)
+            } else {
+                SignCategory.getTtsText(sign.category, sign.speedLimitValue)
+            }
 
             val queueMode = when {
                 sign.category.priority == 1 -> TextToSpeech.QUEUE_FLUSH
@@ -43,6 +52,46 @@ class SpeakSignUseCase @Inject constructor(
 
             tts.speak(text, queueMode, null, "sign_${sign.id}")
             lastSpeakTimestamp = System.currentTimeMillis()
+        }
+    }
+
+    /**
+     * Build a rich announcement using the sign database info.
+     */
+    private fun buildRichAnnouncement(sign: RoadSign): String {
+        val signName = sign.signName ?: return SignCategory.getTtsText(sign.category, sign.speedLimitValue)
+        val code = sign.signCode?.let { ". Код знака $it" } ?: ""
+
+        return when (sign.category) {
+            SignCategory.SPEED_LIMIT -> {
+                if (sign.speedLimitValue != null)
+                    "$signName$code: ${sign.speedLimitValue} километров в час"
+                else
+                    "$signName$code"
+            }
+            SignCategory.RECOMMENDED_SPEED -> {
+                if (sign.speedLimitValue != null)
+                    "$signName$code: ${sign.speedLimitValue} километров в час"
+                else
+                    "$signName$code"
+            }
+            SignCategory.STOP -> "Знак стоп. $signName$code"
+            SignCategory.RAILROAD_CROSSING -> "Внимание! $signName$code"
+            SignCategory.ROAD_WORKS -> "Внимание! $signName$code"
+            SignCategory.ICE_WARNING -> "Внимание! $signName$code"
+            SignCategory.DANGEROUS_AREA -> "Внимание! $signName$code"
+            SignCategory.CHILDREN_WARNING -> "Осторожно! $signName$code"
+            SignCategory.PEDESTRIAN_CROSSING -> "Внимание! $signName$code"
+            SignCategory.NO_ENTRY -> "Запрещающий знак: $signName$code"
+            SignCategory.NO_STOPPING -> "$signName$code. Зона действия до следующего перекрёстка"
+            SignCategory.PEDESTRIAN_UNDERPASS -> "$signName$code"
+            SignCategory.MOTORWAY -> "$signName$code"
+            SignCategory.GAS_STATION -> "$signName$code"
+            SignCategory.POLICE -> "$signName$code"
+            SignCategory.HOSPITAL -> "$signName$code"
+            SignCategory.FIRST_AID -> "$signName$code"
+            SignCategory.RESTAURANT -> "$signName$code"
+            else -> "$signName$code"
         }
     }
 

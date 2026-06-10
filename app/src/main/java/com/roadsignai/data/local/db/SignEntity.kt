@@ -17,5 +17,9 @@ data class SignEntity(
     val boundingBoxLeft: Int = 0,
     val boundingBoxTop: Int = 0,
     val boundingBoxRight: Int = 0,
-    val boundingBoxBottom: Int = 0
+    val boundingBoxBottom: Int = 0,
+    val signCode: String? = null,
+    val signName: String? = null,
+    val signDescription: String? = null,
+    val visualGroup: String? = null
 )

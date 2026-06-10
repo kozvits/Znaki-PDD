@@ -94,7 +94,11 @@ class SignRepositoryImpl @Inject constructor(
         boundingBoxLeft = boundingBox.left,
         boundingBoxTop = boundingBox.top,
         boundingBoxRight = boundingBox.right,
-        boundingBoxBottom = boundingBox.bottom
+        boundingBoxBottom = boundingBox.bottom,
+        signCode = signCode,
+        signName = signName,
+        signDescription = signDescription,
+        visualGroup = visualGroup
     )
 
     private fun SignEntity.toDomain() = RoadSign(
@@ -106,6 +110,10 @@ class SignRepositoryImpl @Inject constructor(
         speedLimitValue = speedLimitValue,
         timestamp = timestamp,
         latitude = latitude,
-        longitude = longitude
+        longitude = longitude,
+        signCode = signCode,
+        signName = signName,
+        signDescription = signDescription,
+        visualGroup = visualGroup
     )
 }

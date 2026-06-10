@@ -161,7 +161,7 @@ class CalculateZoneUseCase @Inject constructor(
                 )
             }
             // End-of-restrictions sign
-            newSign.category == SignCategory.END_OF_RESTRICTIONS -> {
+            newSign.category == SignCategory.END_ALL_RESTRICTIONS -> {
                 activeZones[existingZone.id] = existingZone.copy(isActive = false)
                 repository.deactivateZone(existingZone.id)
 
